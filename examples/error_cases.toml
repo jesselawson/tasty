@@ -1,0 +1,13 @@
+[test_timeout]
+method = "GET"
+route = "api/timeout"
+payload = {}
+expect_http_status = 504
+expect_response_includes = {}
+
+[test_bad_request]
+method = "POST"
+route = "api/items"
+payload = { invalid_field = true }
+expect_http_status = 400
+expect_response_includes = { error = "Invalid request body" }

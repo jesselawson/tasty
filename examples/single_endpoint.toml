@@ -1,0 +1,6 @@
+[test_get_user]
+method = "GET"
+route = "api/users/1"
+payload = {}
+expect_http_status = 200
+expect_response_includes = { id = 1, name = "Test User" }

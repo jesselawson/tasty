@@ -1,0 +1,13 @@
+[test_successful_login]
+method = "POST"
+route = "auth/login"
+payload = { username = "test_user", password = "correct_password" }
+expect_http_status = 200
+expect_response_includes = { token_type = "Bearer" }
+
+[test_failed_login]
+method = "POST"
+route = "auth/login"
+payload = { username = "test_user", password = "wrong_password" }
+expect_http_status = 401
+expect_response_includes = { error = "Invalid credentials" }
