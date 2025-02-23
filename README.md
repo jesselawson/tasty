@@ -50,6 +50,8 @@ Run all *.toml test files in your current working directory's
 tasty
 ```
 
+---
+
 Run all *.toml test files in your current working directory's 
 `/examples` folder against `http://localhost:3030`:
 
