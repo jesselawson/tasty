@@ -110,7 +110,7 @@ method = "POST"
 route = "auth/signup"
 payload = { email = "alice@example.com", password = "This is a Valid Password!@t%" }
 expect_http_status = 200
-expect_payload_includes = { status = "ok" }
+expect_response_includes = { status = "ok" }
 ```
 
 ### Test File Syntax
@@ -126,7 +126,7 @@ in each table:
 * `route` The route to send the request to, not including the base URL
 * `payload` A TOML table that includes the request data
 * `expect_http_status` The integer HTTP response code that indicates a passing test
-* `expect_payload_includes` _(Optional)_ One or more properties that MUST be present in the response payload
+* `expect_response_includes` _(Optional)_ One or more properties that MUST be present in the response payload
 
 ## Participating & Contributing
 
@@ -166,3 +166,10 @@ there's a character named Rengoku who the protagonists find eating food and sayi
 after each bite. (There's a whole backstory behind why he says this after each bite of 
 food, which I will not get into here). So I was running these tests and reminding 
 myself of Rengoku as he was saying "tasty!" after each bite. And thus, _tasty_ was born. 
+
+## Changelog
+
+### 0.9.2
+
+* Corrected erroneous field name in readme
+* Added debug flag (`-d` or `--debug`) for the curious (and/or suspicious). 
