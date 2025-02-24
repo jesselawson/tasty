@@ -5,18 +5,28 @@ A delightfully simple command-line tool for testing your APIs.
 **Tasty** is a command-line tool that runs tests against your APIs. These 
 tests are defined and grouped in TOML files. 
 
-Currently only `application/json` request and response data can be tested.
+## Status and Roadmap
+
+Tasty is being built as a replacement for my bash scripts that I use for API testing. 
+As I migrate features into Tasty, I'll release updates to this project. All releases will be backwards-compatible. 
+
+The next update will be something from the [Future Improvements](#future-improvements) section below, most likely a way to pass an authentication token between tests (e.g., a text fixtures preamble in the testing files). If you have an idea or request, please don't hesitate to open up an issue and start a conversation. 
+
+Right now, Tasty expects that you're working with the `application/json` content type only.
 
 ## Installation
 
-Clone the repository and build from source:
+### Install with cargo
 
 ```bash
-# Clone the repository
+cargo install tasty
+```
+
+### Build from source
+
+```bash
 git clone https://github.com/teamlanes/tasty.git
 cd tasty
-
-# Build the binary
 cargo build --release
 ```
 
@@ -126,7 +136,7 @@ in each table:
 Contributions are welcome and encouraged. Please feel free to submit a Pull Request. 
 For major changes, please open an issue first to discuss what you would like to change.
 
-### Future Improvements / Roadmap
+### Future Improvements
 
 While `tasty` is already useful for my purposes in its current form, I am open to 
 backwards-compatible enhancements that include (but are not limited to):
