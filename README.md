@@ -1,9 +1,6 @@
 # tasty! 🍰
 
-A delightfully simple command-line tool for testing your APIs.
-
-**Tasty** is a command-line tool that runs tests against your APIs. These 
-tests are defined and grouped in TOML files. 
+**Tasty** is a command-line tool that runs API tests defined and grouped in TOML files.
 
 ## Status and Roadmap
 
