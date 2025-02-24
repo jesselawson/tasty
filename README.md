@@ -157,5 +157,12 @@ the [LICENSE](LICENSE) file for details.
 
 The name `tasty!` comes from the English translation of the Japanese word "umai". 
 
-As I was building an API server, I found myself digging into a particularly complex puzzle 
-that involved asynchronous code and mutexes. At one point I was making changes in one window and running my tests in another window, and as each test completed I was saying _"delicious!"_. I'm not really sure why, but stay with me. So in the Japanese manga series _Kimetsu no Yaiba_ ("Demon Slayer"), there's a character named Rengoku who the protagonists find eating food and saying "umai!" after each bite. (There's a whole backstory behind why he says this after each bite of food, which I will not get into here). So I was running these tests and reminding myself of Rengoku as he was saying "tasty!" after each bite. And thus, _tasty_ was born. 
+As I was building an API server, I found myself digging into a particularly 
+complex puzzle that involved asynchronous code and mutexes. At one point I was 
+making changes in one window and running my tests in another window, and as each 
+test completed I was saying _"delicious!"_. I'm not really sure why, but stay 
+with me. So in the Japanese manga series _Kimetsu no Yaiba_ ("Demon Slayer"), 
+there's a character named Rengoku who the protagonists find eating food and saying "umai!" 
+after each bite. (There's a whole backstory behind why he says this after each bite of 
+food, which I will not get into here). So I was running these tests and reminding 
+myself of Rengoku as he was saying "tasty!" after each bite. And thus, _tasty_ was born. 

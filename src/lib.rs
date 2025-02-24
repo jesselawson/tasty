@@ -145,7 +145,7 @@ pub fn get_test_files(args: &Args) -> Result<Vec<PathBuf>> {
     let tests_dir = args
         .tests_folder
         .clone()
-        .unwrap_or_else(|| PathBuf::from(".tests"));
+        .unwrap_or_else(|| PathBuf::from("api_tests"));
     let mut test_files = Vec::new();
 
     if args.test_files.is_empty() {
