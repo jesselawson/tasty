@@ -5,6 +5,7 @@ authors = ["Jesse Lawson <jesse@lawsonry.com>"]
 edition = "2024"
 license = "GPL-3.0-or-later"
 description = "A CLI that runs API tests defined and grouped in TOML files."
+repository = "https://github.com/jesselawson/tasty"
 
 [dependencies]
 anyhow = "1.0.96"
