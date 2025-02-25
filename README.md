@@ -22,7 +22,7 @@ cargo install tasty
 ### Build from source
 
 ```bash
-git clone https://github.com/teamlanes/tasty.git
+git clone https://github.com/jesselawson/tasty.git
 cd tasty
 cargo build --release
 ```
