@@ -37,6 +37,11 @@ pub struct Args {
     )]
     pub timeout: u64,
 
+    /// Prints extra information on test run, including responses for 
+    /// passing tests.
+    #[arg(short = 'd', long = "debug")]
+    pub debug: bool,
+
     /// Output results as JSON (Not implemented yet)
     #[arg(short = 'j', long = "json")]
     pub json: bool,
@@ -198,21 +203,22 @@ pub async fn run_test_case(
         .json(&test.payload)
         .timeout(Duration::from_secs_f64(args.timeout as f64))
         .send()
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            test.outcome = Some(false);
-            test.feedback = Some(format!("Request failed: {}", e));
-            return Ok(());
-        }
+        .await {
+            Ok(r) => r,
+            Err(e) => {
+                test.outcome = Some(false);
+                test.feedback = Some(format!("Request failed: {}", e));
+                return Ok(());
+            }
     };
+
+    //println!("Response:\n{:?}", response);
 
     let status_matches = response.status().as_u16() == test.expect_http_status;
     let actual_status = response.status().as_u16();
 
     // Parse and validate response
-    let response_json: Table = match response.json().await {
+    let response_json: Table = match response.json::<Table>().await {
         Ok(json) => json,
         Err(e) => {
             test.outcome = Some(false);
@@ -221,6 +227,10 @@ pub async fn run_test_case(
         }
     };
 
+    if args.debug {
+        println!("\n{}\n{}", "DEBUG: Response".bold().dimmed(), serde_json::to_string_pretty(&response_json).unwrap().dimmed());
+    }
+
     // Now check our payload expectations:
     // Do all expected kv pairs exist in the response?
     // If no expectations were provided (None), consider it a match (true):
@@ -228,11 +238,13 @@ pub async fn run_test_case(
         .expect_response_includes
         .as_ref()
         .map(|expected| {
+            if args.debug {
+                println!("\nExpected:\n{}", expected);
+            }
             // Verify that each expected key-value pair matches in the response
             expected
                 .iter()
-                .all(|(k, v)| response_json.get(k) == Some(v))
-        })
+                .all(|(k, v)| { response_json.get(k) == Some(v) })})
         .unwrap_or(true);
 
     // Record test results
@@ -319,11 +331,16 @@ pub async fn run_tests(args: &Args) -> Result<TestSuiteResult> {
 
         for (test_name, case) in test_cases {
             let mut test: TestCase = case.try_into()?;
+
             // Use the table key as the test name if none was provided
             if test.name.is_empty() {
                 test.name = test_name;
             }
             stats.total += 1;
+
+            if args.debug {
+                println!("DEBUG: TestCase\n{:?}\n", test);
+            }
 
             print!("  {} ... ", test.name);
 
@@ -424,6 +441,7 @@ mod tests {
             tests_folder: Some(PathBuf::from("examples")),
             timeout: 30,
             json: false,
+            debug: false
         };
 
         let files = get_test_files(&args)?;

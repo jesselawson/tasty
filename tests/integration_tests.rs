@@ -13,6 +13,7 @@ async fn test_examples() -> Result<()> {
         tests_folder: Some(PathBuf::from("examples")),
         timeout: 30,
         json: false,
+        debug: false
     };
 
     server.mock(|when, then| {
