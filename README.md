@@ -169,6 +169,10 @@ myself of Rengoku as he was saying "tasty!" after each bite. And thus, _tasty_ w
 
 ## Changelog
 
+### 0.9.3
+
+* Stops testing if it can't reach the API server on the first test.
+
 ### 0.9.2
 
 * Corrected erroneous field name in readme

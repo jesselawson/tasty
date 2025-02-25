@@ -102,7 +102,7 @@ pub struct TestResult {
     pub feedback: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum TestStatus {
     Passed,
@@ -208,11 +208,9 @@ pub async fn run_test_case(
             Err(e) => {
                 test.outcome = Some(false);
                 test.feedback = Some(format!("Request failed: {}", e));
-                return Ok(());
+                return Err(e.into());
             }
     };
-
-    //println!("Response:\n{:?}", response);
 
     let status_matches = response.status().as_u16() == test.expect_http_status;
     let actual_status = response.status().as_u16();
@@ -329,6 +327,8 @@ pub async fn run_tests(args: &Args) -> Result<TestSuiteResult> {
                 .bold()
         );
 
+        let total_tests = &test_cases.len();
+
         for (test_name, case) in test_cases {
             let mut test: TestCase = case.try_into()?;
 
@@ -398,7 +398,20 @@ pub async fn run_tests(args: &Args) -> Result<TestSuiteResult> {
                 }
             };
 
-            results.push(result);
+            // If we can't run the first test, we likely can't run the rest of them.
+            // Bail out and let the user know:
+            match result.status {
+                TestStatus::Error => {
+                    // How many tests are left? 
+                    stats.skipped += total_tests - stats.total;
+                    println!("\n{}\n{}", "Failed to run a test (can the API server be reached?)".red(), 
+                        format!("Skipping {} remaining tests.", stats.skipped).yellow());
+                    break
+                },
+                _ => {
+                    results.push(result);
+                }
+            }
         }
     }
 
