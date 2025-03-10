@@ -169,6 +169,11 @@ myself of Rengoku as he was saying "tasty!" after each bite. And thus, _tasty_ w
 
 ## Changelog
 
+### 0.9.4
+
+* The `-t` flag to provide a custom testing directory now correctly interprets relative paths. Before, passing `-t example` would not read from the `example` folder in the current working directory. Now, you can either specify a relative path or a full path. 
+* Continued improvements around output formatting, especially when the debug flag (`d`/`--debug`) is passed.
+
 ### 0.9.3
 
 * Stops testing if it can't reach the API server on the first test.
