@@ -37,7 +37,7 @@ pub struct Args {
     )]
     pub timeout: u64,
 
-    /// Prints extra information on test run, including responses for 
+    /// Prints extra information on test run, including responses for
     /// passing tests.
     #[arg(short = 'd', long = "debug")]
     pub debug: bool,
@@ -47,7 +47,7 @@ pub struct Args {
     pub json: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TestCase {
     /// The name of the test, set from the toml table key value if not explicitly provided
     #[serde(default)]
@@ -147,15 +147,37 @@ pub fn print_summary(stats: &TestStats) {
 }
 
 pub fn get_test_files(args: &Args) -> Result<Vec<PathBuf>> {
-    let tests_dir = args
+    let base_tests_dir = args
         .tests_folder
         .clone()
         .unwrap_or_else(|| PathBuf::from("api_tests"));
+
+    let mut tests_dir = base_tests_dir.clone();
+
+    if !tests_dir.is_absolute() {
+        if let Ok(current_dir) = std::env::current_dir() {
+            tests_dir = current_dir.join(tests_dir);
+        }
+        if args.debug {
+            println!(
+                "{}",
+                format!("Using tests directory: {:?}", tests_dir).dimmed()
+            );
+        }
+    } else {
+        return Err(anyhow::anyhow!("Failed to determine current directory"));
+    }
+
     let mut test_files = Vec::new();
 
     if args.test_files.is_empty() {
         // Find all .toml files in the tests directory
-        for entry in fs::read_dir(&tests_dir)? {
+        let read_dir = match fs::read_dir(&tests_dir) {
+            Ok(d) => d,
+            Err(e) => return Err(anyhow::anyhow!("Unable to access the folder '{}'\n  (Got \"{}\")\nBe sure the folder exists and is readable. If you don't understand why you are getting this error, try the help command:\n    {}", &tests_dir.display(), e, "tasty --help".blue().bold()))
+        };
+
+        for entry in read_dir {
             let path = entry?.path();
             if path.extension().and_then(|e| e.to_str()) == Some("toml") {
                 test_files.push(path);
@@ -203,14 +225,17 @@ pub async fn run_test_case(
         .json(&test.payload)
         .timeout(Duration::from_secs_f64(args.timeout as f64))
         .send()
-        .await {
-            Ok(r) => r,
-            Err(e) => {
-                test.outcome = Some(false);
-                test.feedback = Some(format!("Request failed: {}", e));
-                return Err(e.into());
-            }
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            test.outcome = Some(false);
+            test.feedback = Some(format!("Request failed: {}", e));
+            return Err(e.into());
+        }
     };
+
+    let response_status = response.status().clone();
 
     let status_matches = response.status().as_u16() == test.expect_http_status;
     let actual_status = response.status().as_u16();
@@ -220,13 +245,22 @@ pub async fn run_test_case(
         Ok(json) => json,
         Err(e) => {
             test.outcome = Some(false);
-            test.feedback = Some(format!("Failed to parse response JSON: {}", e));
+            test.feedback = Some(format!("    HTTP Response: {}\n      Error: {}", 
+                &response_status, e));
             return Ok(());
         }
     };
 
     if args.debug {
-        println!("\n{}\n{}", "DEBUG: Response".bold().dimmed(), serde_json::to_string_pretty(&response_json).unwrap().dimmed());
+        println!(
+            "{} {}\n{}\n{}",
+            &test.name.blue().dimmed().bold(),
+            "response".blue().dimmed(),
+            &response_status,
+            serde_json::to_string_pretty(&response_json)
+                .unwrap()
+                .dimmed()
+        );
     }
 
     // Now check our payload expectations:
@@ -236,13 +270,11 @@ pub async fn run_test_case(
         .expect_response_includes
         .as_ref()
         .map(|expected| {
-            if args.debug {
-                println!("\nExpected:\n{}", expected);
-            }
             // Verify that each expected key-value pair matches in the response
             expected
                 .iter()
-                .all(|(k, v)| { response_json.get(k) == Some(v) })})
+                .all(|(k, v)| response_json.get(k) == Some(v))
+        })
         .unwrap_or(true);
 
     // Record test results
@@ -297,6 +329,16 @@ pub async fn run_tests(args: &Args) -> Result<TestSuiteResult> {
         .build()
         .context("Failed to create HTTP client")?;
 
+    if args.debug {
+        println!(
+            "Test folder: {:?}",
+            &args
+                .tests_folder
+                .clone()
+                .unwrap_or(std::path::PathBuf::from("api_tests"))
+        );
+    }
+
     let test_files = get_test_files(&args)?;
     let mut stats = TestStats::default();
     let mut results: Vec<TestResult> = Vec::new();
@@ -322,7 +364,7 @@ pub async fn run_tests(args: &Args) -> Result<TestSuiteResult> {
 
         println!(
             "\n{}",
-            format!("Running tests from {:?}", path.file_name().unwrap())
+            format!("Running tests from {:?}\n", path.file_name().unwrap())
                 .blue()
                 .bold()
         );
@@ -338,11 +380,19 @@ pub async fn run_tests(args: &Args) -> Result<TestSuiteResult> {
             }
             stats.total += 1;
 
-            if args.debug {
-                println!("DEBUG: TestCase\n{:?}\n", test);
+            if !args.debug {
+                print!("  {} ... ", test.name);
+            } else {
+                println!(
+                    "{}",
+                    format!(
+                        "{} {}\n{}\n",
+                        &test.name.blue().dimmed().bold(),
+                        "definition".blue().dimmed(),
+                        serde_json::to_string_pretty(&test).unwrap().dimmed()
+                    )
+                );
             }
-
-            print!("  {} ... ", test.name);
 
             let result = if let Err(e) = run_test_case(&client, &base_url, &mut test, &args).await {
                 println!("{}", "ERROR".red());
@@ -353,16 +403,32 @@ pub async fn run_tests(args: &Args) -> Result<TestSuiteResult> {
                     name: test.name,
                     status: TestStatus::Error,
                     duration_ms: None,
-                    feedback: Some(e.to_string()),
+                    feedback: Some(format!("    {}\n", e.to_string().dimmed().red())),
                 }
             } else {
                 match test.outcome {
                     Some(true) => {
-                        println!(
-                            "{} {}",
-                            "ok".green(),
-                            format!("({}ms)", test.duration.unwrap().as_millis()).dimmed()
-                        );
+                        if args.debug {
+                            println!(
+                                "{}\n{}",
+                                format!(
+                                    "{} {}",
+                                    &test.name.blue().dimmed().bold(),
+                                    "outcome".blue().dimmed(),
+                                ),
+                                format!(
+                                    "    {} {}",
+                                    "ok".green(),
+                                    format!("({}ms)", test.duration.unwrap().as_millis()).dimmed()
+                                )
+                            );
+                        } else {
+                            println!(
+                                "{} {}",
+                                "ok".green(),
+                                format!("({}ms)", test.duration.unwrap().as_millis()).dimmed()
+                            );
+                        }
 
                         stats.passed += 1;
                         TestResult {
@@ -373,7 +439,19 @@ pub async fn run_tests(args: &Args) -> Result<TestSuiteResult> {
                         }
                     }
                     Some(false) => {
-                        println!("{}", "failed".red());
+                        if args.debug {
+                            println!(
+                                "{}\n{}",
+                                format!(
+                                    "{} {}",
+                                    &test.name.blue().dimmed().bold(),
+                                    "outcome".blue().dimmed(),
+                                ),
+                                "    failed".red()
+                            );
+                        } else {
+                            println!("{}", "failed".red());
+                        }
                         println!("{}", test.feedback.as_ref().unwrap());
 
                         stats.failed += 1;
@@ -402,12 +480,15 @@ pub async fn run_tests(args: &Args) -> Result<TestSuiteResult> {
             // Bail out and let the user know:
             match result.status {
                 TestStatus::Error => {
-                    // How many tests are left? 
+                    // How many tests are left?
                     stats.skipped += total_tests - stats.total;
-                    println!("\n{}\n{}", "Failed to run a test (can the API server be reached?)".red(), 
-                        format!("Skipping {} remaining tests.", stats.skipped).yellow());
-                    break
-                },
+                    println!(
+                        "\n{}\n{}",
+                        "Failed to run a test (can the API server be reached?)".red(),
+                        format!("Skipping {} remaining tests.", stats.skipped).yellow()
+                    );
+                    break;
+                }
                 _ => {
                     results.push(result);
                 }
@@ -454,7 +535,7 @@ mod tests {
             tests_folder: Some(PathBuf::from("examples")),
             timeout: 30,
             json: false,
-            debug: false
+            debug: false,
         };
 
         let files = get_test_files(&args)?;
