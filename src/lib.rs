@@ -85,6 +85,22 @@ pub struct TestCase {
     feedback: Option<String>,
 }
 
+/// Implicit conversion implementation to provide JSON intermediate represenation 
+/// for type casting as well as future export-to-json work
+impl TryFrom<&toml::Value> for TestCase {
+    type Error = anyhow::Error;
+    
+    fn try_from(value: &toml::Value) -> std::result::Result<Self, Self::Error> {
+        if let toml::Value::Table(_) = value {
+            let test_case: TestCase = serde_json::from_value(
+                serde_json::to_value(value)?
+            )?;
+            return Ok(test_case);
+        } 
+        Err(anyhow::anyhow!("Expected TOML table"))
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct TestStats {
     pub total: usize,
@@ -137,6 +153,7 @@ impl Serialize for TestStats {
 
 static METHODS: [&str; 5] = ["POST", "GET", "PUT", "PATCH", "DELETE"];
 
+/// A helper function to print test results to the terminal window
 pub fn print_summary(stats: &TestStats) {
     println!("\nTest Summary:");
     println!("  Total tests: {}", stats.total);
@@ -144,6 +161,25 @@ pub fn print_summary(stats: &TestStats) {
     println!("  Failed: {}", stats.failed.to_string().red());
     println!("  Skipped: {}", stats.skipped.to_string().yellow());
     println!("  Total duration: {}ms", stats.total_duration.as_millis());
+}
+
+/// Scans the raw TOML content to extract table keys in the order they appear,
+/// providing a vec ready to be iterated through by the test runner
+fn extract_table_keys_order(content: &str) -> Vec<String> {
+    let mut keys = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') // Should start with a '['
+            && trimmed.ends_with(']') // Should end with a ']'
+            && !trimmed[1..].contains('[')
+        // Should not have s second '[' after pos 0
+        {
+            let key = trimmed[1..trimmed.len() - 1].to_string();
+            keys.push(key);
+        }
+    }
+
+    keys
 }
 
 pub fn get_test_files(args: &Args) -> Result<Vec<PathBuf>> {
@@ -174,7 +210,14 @@ pub fn get_test_files(args: &Args) -> Result<Vec<PathBuf>> {
         // Find all .toml files in the tests directory
         let read_dir = match fs::read_dir(&tests_dir) {
             Ok(d) => d,
-            Err(e) => return Err(anyhow::anyhow!("Unable to access the folder '{}'\n  (Got \"{}\")\nBe sure the folder exists and is readable. If you don't understand why you are getting this error, try the help command:\n    {}", &tests_dir.display(), e, "tasty --help".blue().bold()))
+            Err(e) => {
+                return Err(anyhow::anyhow!(
+                    "Unable to access the folder '{}'\n  (Got \"{}\")\nBe sure the folder exists and is readable. If you don't understand why you are getting this error, try the help command:\n    {}",
+                    &tests_dir.display(),
+                    e,
+                    "tasty --help".blue().bold()
+                ));
+            }
         };
 
         for entry in read_dir {
@@ -245,8 +288,10 @@ pub async fn run_test_case(
         Ok(json) => json,
         Err(e) => {
             test.outcome = Some(false);
-            test.feedback = Some(format!("    HTTP Response: {}\n      Error: {}", 
-                &response_status, e));
+            test.feedback = Some(format!(
+                "    HTTP Response: {}\n      Error: {}",
+                &response_status, e
+            ));
             return Ok(());
         }
     };
@@ -271,15 +316,13 @@ pub async fn run_test_case(
         .as_ref()
         .map(|expected| {
             // Verify that each expected key-value pair matches in the response
-            expected
-                .iter()
-                .all(|(k, v)| {
-                    if let Ok(json_v) = serde_json::to_value(v) {
-                        response_json.get(k) == Some(&json_v)
-                    } else {
-                        false
-                    }
-                })
+            expected.iter().all(|(k, v)| {
+                if let Ok(json_v) = serde_json::to_value(v) {
+                    response_json.get(k) == Some(&json_v)
+                } else {
+                    false
+                }
+            })
         })
         .unwrap_or(true);
 
@@ -377,126 +420,133 @@ pub async fn run_tests(args: &Args) -> Result<TestSuiteResult> {
 
         let total_tests = &test_cases.len();
 
-        for (test_name, case) in test_cases {
-            let mut test: TestCase = case.try_into()?;
+        let ordered_keys = extract_table_keys_order(&content);
 
-            // Use the table key as the test name if none was provided
-            if test.name.is_empty() {
-                test.name = test_name;
-            }
-            stats.total += 1;
+        for key in ordered_keys {
+            if let Some(case) = test_cases.get(&key) {
+                let mut test: TestCase = case.try_into()?;
 
-            if !args.debug {
-                print!("  {} ... ", test.name);
-            } else {
-                println!(
-                    "{}",
-                    format!(
-                        "{} {}\n{}\n",
-                        &test.name.blue().dimmed().bold(),
-                        "definition".blue().dimmed(),
-                        serde_json::to_string_pretty(&test).unwrap().dimmed()
-                    )
-                );
-            }
-
-            let result = if let Err(e) = run_test_case(&client, &base_url, &mut test, &args).await {
-                println!("{}", "ERROR".red());
-                println!("    {}", e);
-
-                stats.failed += 1;
-                TestResult {
-                    name: test.name,
-                    status: TestStatus::Error,
-                    duration_ms: None,
-                    feedback: Some(format!("    {}\n", e.to_string().dimmed().red())),
+                // Use the table key as the test name if none was provided
+                if test.name.is_empty() {
+                    test.name = key;
                 }
-            } else {
-                match test.outcome {
-                    Some(true) => {
-                        if args.debug {
-                            println!(
-                                "{}\n{}",
-                                format!(
+                stats.total += 1;
+
+                if !args.debug {
+                    print!("  {} ... ", test.name);
+                } else {
+                    println!(
+                        "{}",
+                        format!(
+                            "{} {}\n{}\n",
+                            &test.name.blue().dimmed().bold(),
+                            "definition".blue().dimmed(),
+                            serde_json::to_string_pretty(&test).unwrap().dimmed()
+                        )
+                    );
+                }
+
+                let result = if let Err(e) =
+                    run_test_case(&client, &base_url, &mut test, &args).await
+                {
+                    println!("{}", "ERROR".red());
+                    println!("    {}", e);
+
+                    stats.failed += 1;
+                    TestResult {
+                        name: test.name,
+                        status: TestStatus::Error,
+                        duration_ms: None,
+                        feedback: Some(format!("    {}\n", e.to_string().dimmed().red())),
+                    }
+                } else {
+                    match test.outcome {
+                        Some(true) => {
+                            if args.debug {
+                                println!(
+                                    "{}\n{}",
+                                    format!(
+                                        "{} {}",
+                                        &test.name.blue().dimmed().bold(),
+                                        "outcome".blue().dimmed(),
+                                    ),
+                                    format!(
+                                        "    {} {}",
+                                        "ok".green(),
+                                        format!("({}ms)", test.duration.unwrap().as_millis())
+                                            .dimmed()
+                                    )
+                                );
+                            } else {
+                                println!(
                                     "{} {}",
-                                    &test.name.blue().dimmed().bold(),
-                                    "outcome".blue().dimmed(),
-                                ),
-                                format!(
-                                    "    {} {}",
                                     "ok".green(),
                                     format!("({}ms)", test.duration.unwrap().as_millis()).dimmed()
-                                )
-                            );
-                        } else {
-                            println!(
-                                "{} {}",
-                                "ok".green(),
-                                format!("({}ms)", test.duration.unwrap().as_millis()).dimmed()
-                            );
-                        }
+                                );
+                            }
 
-                        stats.passed += 1;
-                        TestResult {
-                            name: test.name,
-                            status: TestStatus::Passed,
-                            duration_ms: Some(test.duration.unwrap().as_millis()),
-                            feedback: None,
+                            stats.passed += 1;
+                            TestResult {
+                                name: test.name,
+                                status: TestStatus::Passed,
+                                duration_ms: Some(test.duration.unwrap().as_millis()),
+                                feedback: None,
+                            }
+                        }
+                        Some(false) => {
+                            if args.debug {
+                                println!(
+                                    "{}\n{}",
+                                    format!(
+                                        "{} {}",
+                                        &test.name.blue().dimmed().bold(),
+                                        "outcome".blue().dimmed(),
+                                    ),
+                                    "    failed".red()
+                                );
+                            } else {
+                                println!("{}", "failed".red());
+                            }
+                            println!("{}", test.feedback.as_ref().unwrap());
+
+                            stats.failed += 1;
+                            TestResult {
+                                name: test.name,
+                                status: TestStatus::Failed,
+                                duration_ms: None,
+                                feedback: test.feedback,
+                            }
+                        }
+                        None => {
+                            println!("{}", "SKIPPED".yellow());
+
+                            stats.skipped += 1;
+                            TestResult {
+                                name: test.name,
+                                status: TestStatus::Skipped,
+                                duration_ms: None,
+                                feedback: None,
+                            }
                         }
                     }
-                    Some(false) => {
-                        if args.debug {
-                            println!(
-                                "{}\n{}",
-                                format!(
-                                    "{} {}",
-                                    &test.name.blue().dimmed().bold(),
-                                    "outcome".blue().dimmed(),
-                                ),
-                                "    failed".red()
-                            );
-                        } else {
-                            println!("{}", "failed".red());
-                        }
-                        println!("{}", test.feedback.as_ref().unwrap());
+                };
 
-                        stats.failed += 1;
-                        TestResult {
-                            name: test.name,
-                            status: TestStatus::Failed,
-                            duration_ms: None,
-                            feedback: test.feedback,
-                        }
+                // If we can't run the first test, we likely can't run the rest of them.
+                // Bail out and let the user know:
+                match result.status {
+                    TestStatus::Error => {
+                        // How many tests are left?
+                        stats.skipped += total_tests - stats.total;
+                        println!(
+                            "\n{}\n{}",
+                            "Failed to run a test (can the API server be reached?)".red(),
+                            format!("Skipping {} remaining tests.", stats.skipped).yellow()
+                        );
+                        break;
                     }
-                    None => {
-                        println!("{}", "SKIPPED".yellow());
-
-                        stats.skipped += 1;
-                        TestResult {
-                            name: test.name,
-                            status: TestStatus::Skipped,
-                            duration_ms: None,
-                            feedback: None,
-                        }
+                    _ => {
+                        results.push(result);
                     }
-                }
-            };
-
-            // If we can't run the first test, we likely can't run the rest of them.
-            // Bail out and let the user know:
-            match result.status {
-                TestStatus::Error => {
-                    // How many tests are left?
-                    stats.skipped += total_tests - stats.total;
-                    println!(
-                        "\n{}\n{}",
-                        "Failed to run a test (can the API server be reached?)".red(),
-                        format!("Skipping {} remaining tests.", stats.skipped).yellow()
-                    );
-                    break;
-                }
-                _ => {
-                    results.push(result);
                 }
             }
         }
@@ -545,13 +595,11 @@ mod tests {
         };
 
         let files = get_test_files(&args)?;
-
-        assert!(
-            files.contains(&PathBuf::from("examples/single_endpoint.toml")),
-            "actual: {:?}",
-            files
-        );
-        assert!(files.contains(&PathBuf::from("examples/login_tests.toml")));
+        
+        assert!(files.iter().any(|f| f.ends_with("examples/error_cases.toml")));
+        assert!(files.iter().any(|f| f.ends_with("examples/login_tests.toml")));
+        assert!(files.iter().any(|f| f.ends_with("examples/single_endpoint.toml")));
+        
         Ok(())
     }
 }

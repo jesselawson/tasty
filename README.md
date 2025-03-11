@@ -113,6 +113,20 @@ expect_http_status = 200
 expect_response_includes = { status = "ok" }
 ```
 
+Here's an example of the same test written in a different TOML syntax: 
+
+```toml
+# user_signup.toml
+
+[accept_valid_signup]
+method = "POST"
+route = "auth/signup"
+payload.email = "alice@example.com"
+payload.password = "This is a Valid Password!@t%"
+expect_http_status = 200
+expect_response_includes.status = "ok"
+```
+
 ### Test File Syntax
 
 Test files have the following properties that MUST be present 
@@ -171,7 +185,9 @@ myself of Rengoku as he was saying "tasty!" after each bite. And thus, _tasty_ w
 
 ### 0.9.5
 
-* Fixes an issue caused by deserializing JSON response values into a `Table` from the `toml` crate. Responses from test runs now use `serde_json::Value` semantics. 
+* Fixed an issue caused by deserializing JSON response values into a `Table` from the `toml` crate. Responses from test runs now use `serde_json::Value`.
+* Enforced declaration ordering of test runs. Previously, tests were running in alphabetical order according to the table key of the defined tests. Now they will run in the order in which they appear in the test files. 
+* Made `url` a flag rather than a positional argument.
 
 ### 0.9.4
 
