@@ -4,10 +4,10 @@
 
 ## Status and Roadmap
 
-Tasty is being built as a replacement for my bash scripts that I use for API testing. 
-As I migrate features into Tasty, I'll release updates to this project. All releases will be backwards-compatible. 
+**Expect this project to be updated at least once or twice per month until `v1.0.0`.**
 
-The next update will be something from the [Future Improvements](#future-improvements) section below, most likely a way to pass an authentication token between tests (e.g., a text fixtures preamble in the testing files). If you have an idea or request, please don't hesitate to open up an issue and start a conversation. 
+* Tasty is being built as a replacement for my bash scripts that I use for API testing. As I migrate features into Tasty, I'll release updates to this project. 
+* All releases will aim to be backwards-compatible. That includes keeping the way the testing files are written (e.g., using table keys as test names). 
 
 Right now, Tasty expects that you're working with the `application/json` content type only.
 
