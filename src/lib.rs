@@ -241,7 +241,7 @@ pub async fn run_test_case(
     let actual_status = response.status().as_u16();
 
     // Parse and validate response
-    let response_json: Table = match response.json::<Table>().await {
+    let response_json: serde_json::Value = match response.json().await {
         Ok(json) => json,
         Err(e) => {
             test.outcome = Some(false);
@@ -273,7 +273,13 @@ pub async fn run_test_case(
             // Verify that each expected key-value pair matches in the response
             expected
                 .iter()
-                .all(|(k, v)| response_json.get(k) == Some(v))
+                .all(|(k, v)| {
+                    if let Ok(json_v) = serde_json::to_value(v) {
+                        response_json.get(k) == Some(&json_v)
+                    } else {
+                        false
+                    }
+                })
         })
         .unwrap_or(true);
 

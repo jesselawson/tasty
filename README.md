@@ -169,6 +169,10 @@ myself of Rengoku as he was saying "tasty!" after each bite. And thus, _tasty_ w
 
 ## Changelog
 
+### 0.9.5
+
+* Fixes an issue caused by deserializing JSON response values into a `Table` from the `toml` crate. Responses from test runs now use `serde_json::Value` semantics. 
+
 ### 0.9.4
 
 * The `-t` flag to provide a custom testing directory now correctly interprets relative paths. Before, passing `-t example` would not read from the `example` folder in the current working directory. Now, you can either specify a relative path or a full path. 
