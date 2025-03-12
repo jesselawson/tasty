@@ -17,12 +17,8 @@ use toml::Table;
 #[command(author, version, about = format!("{}, the API server testing tool", "Tasty".bold()))]
 pub struct Args {
     /// Base URL for the API (defaults to http://127.0.0.1:3030)
-    #[arg(value_name = "URL")]
+    #[arg(short = 'b', long = "base-url", value_name = "BASE_URL")]
     pub base_url: Option<String>,
-
-    /// Specific test files to run
-    #[arg(value_name = "TESTS")]
-    pub test_files: Vec<String>,
 
     /// Custom tests folder path
     #[arg(short = 't', long = "tests-folder", value_name = "FOLDER")]
@@ -45,6 +41,10 @@ pub struct Args {
     /// Output results as JSON (Not implemented yet)
     #[arg(short = 'j', long = "json")]
     pub json: bool,
+
+    /// Specific test files to run
+    #[arg(value_name = "TESTS")]
+    pub test_files: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
