@@ -4,6 +4,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use colored::*;
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -45,6 +46,11 @@ pub struct Args {
     /// Output results as JSON (Not implemented yet)
     #[arg(short = 'j', long = "json")]
     pub json: bool,
+
+    /// HTTP headers to include with each request (can be used multiple times)
+    /// Format: "Header-Name: value"
+    #[arg(short = 'H', long = "header", value_name = "HEADER")]
+    pub headers: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -318,14 +324,33 @@ pub async fn run_test_case(
     Ok(())
 }
 
+fn parse_headers(header_strings: &[String]) -> Result<HeaderMap> {
+    let mut headers = HeaderMap::new();
+    for h in header_strings {
+        let parts: Vec<&str> = h.splitn(2, ':').collect();
+        if parts.len() != 2 {
+            return Err(anyhow::anyhow!("Invalid header format: '{}'. Expected 'Name: value'", h));
+        }
+        let name = HeaderName::from_bytes(parts[0].trim().as_bytes())
+            .with_context(|| format!("Invalid header name: {}", parts[0]))?;
+        let value = HeaderValue::from_str(parts[1].trim())
+            .with_context(|| format!("Invalid header value: {}", parts[1]))?;
+        headers.insert(name, value);
+    }
+    Ok(headers)
+}
+
 pub async fn run_tests(args: &Args) -> Result<TestSuiteResult> {
     let base_url = args
         .base_url
         .clone()
         .unwrap_or_else(|| "http://127.0.0.1:3030".to_string());
 
+    let headers = parse_headers(&args.headers)?;
+
     let client = Client::builder()
         .timeout(Duration::from_secs(args.timeout))
+        .default_headers(headers)
         .build()
         .context("Failed to create HTTP client")?;
 
@@ -536,6 +561,7 @@ mod tests {
             timeout: 30,
             json: false,
             debug: false,
+            headers: vec![],
         };
 
         let files = get_test_files(&args)?;
