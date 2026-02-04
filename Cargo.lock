@@ -2069,6 +2069,7 @@ dependencies = [
  "clap",
  "colored",
  "httpmock",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
