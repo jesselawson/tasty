@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use colored::*;
 use regex::Regex;
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -43,6 +44,11 @@ pub struct Args {
     /// Output results as JSON (Not implemented yet)
     #[arg(short = 'j', long = "json")]
     pub json: bool,
+
+    /// HTTP headers to include with each request (can be used multiple times)
+    /// Format: "Header-Name: value"
+    #[arg(short = 'H', long = "header", value_name = "HEADER")]
+    pub headers: Vec<String>,
 
     /// Specific test files to run
     #[arg(value_name = "TESTS")]
@@ -369,6 +375,27 @@ fn validate_response_regex(
     }
 }
 
+/// Parses CLI header strings into a HeaderMap.
+/// Format: "Header-Name: value"
+fn parse_headers(header_strings: &[String]) -> Result<HeaderMap> {
+    let mut headers = HeaderMap::new();
+    for h in header_strings {
+        let parts: Vec<&str> = h.splitn(2, ':').collect();
+        if parts.len() != 2 {
+            return Err(anyhow::anyhow!(
+                "Invalid header format: '{}'. Expected 'Name: value'",
+                h
+            ));
+        }
+        let name = HeaderName::from_bytes(parts[0].trim().as_bytes())
+            .with_context(|| format!("Invalid header name: {}", parts[0]))?;
+        let value = HeaderValue::from_str(parts[1].trim())
+            .with_context(|| format!("Invalid header value: {}", parts[1]))?;
+        headers.insert(name, value);
+    }
+    Ok(headers)
+}
+
 /// A helper function to print test results to the terminal window
 pub fn print_summary(stats: &TestStats) {
     println!("\nTest Summary:");
@@ -618,8 +645,11 @@ pub async fn run_tests(args: &Args) -> Result<TestSuiteResult> {
         .clone()
         .unwrap_or_else(|| "http://127.0.0.1:3030".to_string());
 
+    let headers = parse_headers(&args.headers)?;
+
     let client = Client::builder()
         .timeout(Duration::from_secs(args.timeout))
+        .default_headers(headers)
         .build()
         .context("Failed to create HTTP client")?;
 
@@ -845,6 +875,7 @@ mod tests {
             timeout: 30,
             json: false,
             debug: false,
+            headers: vec![],
         };
 
         let files = get_test_files(&args)?;
@@ -1019,6 +1050,41 @@ mod tests {
             }
         });
         let result = resolve_payload_references(&mut payload, &responses);
+        assert!(result.is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_headers() -> Result<()> {
+        // Test valid headers
+        let headers = parse_headers(&[
+            "Authorization: Bearer token123".to_string(),
+            "X-Api-Key: secret".to_string(),
+        ])?;
+        assert_eq!(headers.len(), 2);
+        assert_eq!(
+            headers.get("authorization").unwrap().to_str().unwrap(),
+            "Bearer token123"
+        );
+        assert_eq!(
+            headers.get("x-api-key").unwrap().to_str().unwrap(),
+            "secret"
+        );
+
+        // Test empty headers
+        let headers = parse_headers(&[])?;
+        assert!(headers.is_empty());
+
+        // Test header with colon in value
+        let headers = parse_headers(&["X-Custom: value:with:colons".to_string()])?;
+        assert_eq!(
+            headers.get("x-custom").unwrap().to_str().unwrap(),
+            "value:with:colons"
+        );
+
+        // Test invalid format (no colon)
+        let result = parse_headers(&["InvalidHeader".to_string()]);
         assert!(result.is_err());
 
         Ok(())

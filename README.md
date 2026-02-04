@@ -6,10 +6,9 @@ full of *.toml files.
 
 ## Status and Roadmap
 
-**Expect this project to ship breaking changes until `v1.0.0`.**
+**Expect breaking changes until `v1.0.0`.**
 
-* Tasty is being built as a replacement for my bash scripts that I use for API testing. As I migrate features into Tasty, I'll release updates to this project.
-* All releases will aim to be backwards-compatible. That includes keeping the way the testing files are written (e.g., using table keys as test names).
+Tasty is being built as a replacement for bash scripts used for API testing. The v0.9.5 release introduced breaking changes to the test syntax (see Changelog), moving toward a stable v1.0.0 release.
 
 Right now, Tasty expects that you're working with the `application/json` content type only.
 
@@ -47,6 +46,7 @@ Options:
   -g, --global-timeout <SECONDS>  Global timeout in seconds [default: 30]
   -d, --debug                     Prints extra information on test run, including responses for passing tests
   -j, --json                      Output results as JSON (Not implemented yet)
+  -H, --header <HEADER>           HTTP headers to include with each request (can be used multiple times)
   -h, --help                      Print help
   -V, --version                   Print version
 ```
@@ -96,10 +96,18 @@ directory's `/api_tests` folder against `http://staging-api.example.com`:
 tasty http://staging-api.example.com user_signup auth_flow
 ```
 
+---
+
+Run tests with custom HTTP headers (useful for API keys or static auth tokens):
+
+```bash
+tasty -b https://api.example.com -H "Authorization: Bearer mytoken" -H "X-Api-Key: secret"
+```
+
 ## Writing Tests
 
 Tests are defined in and grouped by TOML files. If you have a
-TOML file named `user_signup.toml`, all the tests in side that file
+TOML file named `user_signup.toml`, all the tests inside that file
 can be invoked with Tasty by passing it as a command-line argument.
 
 Each test file can contain multiple test cases. Here's an example
@@ -111,9 +119,9 @@ of a file with a single test case:
 [accept_valid_signup]
 method = "POST"
 route = "auth/signup"
-payload = { email = "alice@example.com", password = "This is a Valid Password!@t%" }
-expect_http_status = 200
-expect_response_includes = { status = "ok" }
+payload = { email = "alice@example.com", password = "SecurePassword123!" }
+expect.http_status = 200
+expect.response = { status = "ok" }
 ```
 
 Here's an example of the same test written in a different TOML syntax:
@@ -125,25 +133,65 @@ Here's an example of the same test written in a different TOML syntax:
 method = "POST"
 route = "auth/signup"
 payload.email = "alice@example.com"
-payload.password = "This is a Valid Password!@t%"
-expect_http_status = 200
-expect_response_includes.status = "ok"
+payload.password = "SecurePassword123!"
+expect.http_status = 200
+expect.response.status = "ok"
 ```
 
 ### Test File Syntax
 
-Test files have the following properties that MUST be present
-in each table:
+Test files have the following properties:
 
 * `name` _(Optional)_ The table key is the name of the test in the output report,
   but you can use this field if you'd like your table keys to be different from
-  your test names. You might want this if you prefer the table keys in your TOML
-  files to be organized differently than by the name of each test.
-* `method` The HTTP method to be used in the request
+  your test names.
+* `method` The HTTP method to be used in the request (GET, POST, PUT, PATCH, DELETE)
 * `route` The route to send the request to, not including the base URL
 * `payload` A TOML table that includes the request data
-* `expect_http_status` The integer HTTP response code that indicates a passing test
-* `expect_response_includes` _(Optional)_ One or more properties that MUST be present in the response payload
+* `expect.http_status` The integer HTTP response code that indicates a passing test
+* `expect.response` _(Optional)_ Properties that MUST match exactly in the response (literal matching)
+* `expect.response_regex` _(Optional)_ Properties that MUST match regex patterns in the response
+
+### Regex Matching
+
+Use `expect.response_regex` when you need to validate dynamic values:
+
+```toml
+[test_login]
+method = "POST"
+route = "auth/login"
+payload = { username = "test_user", password = "password123" }
+expect.http_status = 200
+expect.response = { token_type = "Bearer" }
+expect.response_regex = { access_token = "[a-zA-Z0-9_-]+" }
+```
+
+Both `expect.response` (literal) and `expect.response_regex` can be used together in the same test.
+
+### Response Referencing
+
+Tests can reference values from previous test responses. This is useful for authentication flows
+where you need to use a token from a login response in subsequent requests:
+
+```toml
+[test_login]
+method = "POST"
+route = "auth/login"
+payload = { username = "test_user", password = "password123" }
+expect.http_status = 200
+expect.response = { token_type = "Bearer" }
+
+[test_protected_endpoint]
+method = "GET"
+route = "api/protected"
+payload.auth_token = { from = "test_login", property = "access_token" }
+expect.http_status = 200
+```
+
+The `{ from = "test_name", property = "path.to.value" }` syntax extracts values from previous
+test responses using dot notation for nested access (e.g., `user.profile.id`).
+
+If the referenced test doesn't exist or failed, the dependent test will fail with a clear error message.
 
 ## Participating & Contributing
 
@@ -153,16 +201,15 @@ For major changes, please open an issue first to discuss what you would like to 
 ### Future Improvements
 
 While `tasty` is already useful for my purposes in its current form, I am open to
-backwards-compatible enhancements that include (but are not limited to):
+enhancements that include (but are not limited to):
 
-- passing response values (like a a JWT) from one test to another
 - optional json output of test results
 - parallel test execution
-- test dependencies and ordering
 - response schema validation
 - custom test reporters
 - environment variable substitution
 - request/response logging
+- response header validation
 
 
 ## License
@@ -186,16 +233,26 @@ myself of Rengoku as he was saying "tasty!" after each bite. And thus, _tasty_ w
 
 ## Changelog
 
-### 0.9.5
+### 0.9.6
+
+* Added `-H`/`--header` flag for custom HTTP headers. Headers are applied to all requests in a test suite.
+
+### 0.9.5 (Breaking Changes)
+
+* **Breaking:** Replaced `expect_http_status` and `expect_response_includes` with new `expect` syntax:
+  - `expect.http_status` for HTTP status code validation
+  - `expect.response` for literal value matching
+  - `expect.response_regex` for regex pattern matching
+* Added response referencing: tests can now reference values from previous test responses using `{ from = "test_name", property = "path.to.value" }` syntax.
+* Added dot-notation support for nested property access in expectations.
+
+### 0.9.4
 
 * Fixed an issue caused by deserializing JSON response values into a `Table` from the `toml` crate. Responses from test runs now use `serde_json::Value`.
 * Enforced declaration ordering of test runs. Previously, tests were running in alphabetical order according to the table key of the defined tests. Now they will run in the order in which they appear in the test files.
 * Made `url` a flag rather than a positional argument.
-
-### 0.9.4
-
-* The `-t` flag to provide a custom testing directory now correctly interprets relative paths. Before, passing `-t example` would not read from the `example` folder in the current working directory. Now, you can either specify a relative path or a full path.
-* Continued improvements around output formatting, especially when the debug flag (`d`/`--debug`) is passed.
+* The `-t` flag to provide a custom testing directory now correctly interprets relative paths.
+* Continued improvements around output formatting, especially when the debug flag (`-d`/`--debug`) is passed.
 
 ### 0.9.3
 
