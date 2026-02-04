@@ -1,0 +1,16 @@
+# Test regex matching feature
+
+[test_regex_token]
+method = "POST"
+route = "auth/token"
+payload = { client_id = "test_client" }
+expect.http_status = 200
+expect.response = { token_type = "Bearer" }
+expect.response_regex = { access_token = "[a-zA-Z0-9_-]+" }
+
+[test_regex_user_id]
+method = "GET"
+route = "api/users/42"
+payload = {}
+expect.http_status = 200
+expect.response_regex = { id = "\\d+", email = ".*@.*\\..*" }

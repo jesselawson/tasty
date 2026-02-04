@@ -1,0 +1,16 @@
+# Test response referencing feature
+# The second test uses the token from the first test's response
+
+[test_get_token]
+method = "POST"
+route = "auth/token"
+payload = { client_id = "test_client" }
+expect.http_status = 200
+expect.response = { token_type = "Bearer" }
+
+[test_use_token]
+method = "GET"
+route = "api/protected"
+payload.auth_token = { from = "test_get_token", property = "access_token" }
+expect.http_status = 200
+expect.response = { status = "authorized" }
