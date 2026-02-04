@@ -17,7 +17,8 @@ async fn test_examples() -> Result<()> {
         tests_folder: Some(PathBuf::from("examples")),
         timeout: 30,
         json: false,
-        debug: false
+        debug: false,
+        headers: vec![],
     };
 
     server.mock(|when, then| {
@@ -84,7 +85,8 @@ async fn test_response_referencing() -> Result<()> {
         tests_folder: Some(PathBuf::from("examples")),
         timeout: 30,
         json: false,
-        debug: false
+        debug: false,
+        headers: vec![],
     };
 
     // Mock for getting a token
@@ -129,7 +131,8 @@ async fn test_regex_matching() -> Result<()> {
         tests_folder: Some(PathBuf::from("examples")),
         timeout: 30,
         json: false,
-        debug: false
+        debug: false,
+        headers: vec![],
     };
 
     // Mock for token endpoint
@@ -185,7 +188,8 @@ expect.http_status = 200
         tests_folder: Some(temp_dir.clone()),
         timeout: 30,
         json: false,
-        debug: false
+        debug: false,
+        headers: vec![],
     };
 
     server.mock(|when, then| {

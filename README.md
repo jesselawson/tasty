@@ -47,6 +47,7 @@ Options:
   -g, --global-timeout <SECONDS>  Global timeout in seconds [default: 30]
   -d, --debug                     Prints extra information on test run, including responses for passing tests
   -j, --json                      Output results as JSON (Not implemented yet)
+  -H, --header <HEADER>           HTTP headers to include with each request (can be used multiple times)
   -h, --help                      Print help
   -V, --version                   Print version
 ```
